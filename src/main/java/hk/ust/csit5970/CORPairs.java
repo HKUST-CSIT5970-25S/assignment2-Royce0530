@@ -5,10 +5,6 @@ import org.apache.commons.cli.Options;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.*;
-import org.apache.hadoop.io.FloatWritable;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
@@ -19,8 +15,9 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.log4j.Logger;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import hk.ust.csit5970.CORPairs.CORPairsMapper2;
+import hk.ust.csit5970.CORPairs.CORPairsReducer2;
+
 import org.apache.hadoop.io.*;
 
 
@@ -29,8 +26,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.util.*;
-import java.util.Arrays;
-import java.util.HashMap;
 
 /**
  * Compute the bigram count using "pairs" approach
@@ -53,6 +48,17 @@ public class CORPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			while (doc_tokenizer.hasMoreTokens()) {
+				String token = doc_tokenizer.nextToken();
+				if (token.length() > 0) {        
+					Integer count = word_set.get(token);
+					word_set.put(token, count == null ? 1 : count + 1);
+				}
+			}
+			
+			for (Map.Entry<String, Integer> entry : word_set.entrySet()) {
+				context.write(new Text(entry.getKey()), new IntWritable(entry.getValue()));
+			}
 		}
 	}
 
@@ -66,6 +72,11 @@ public class CORPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			int sum = 0;
+			for (IntWritable val : values) {
+				sum += val.get();
+			}
+			context.write(key, new IntWritable(sum));
 		}
 	}
 
@@ -81,6 +92,23 @@ public class CORPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			Set<String> uniqueWords = new HashSet<String>();
+						while (doc_tokenizer.hasMoreTokens()) {
+				uniqueWords.add(doc_tokenizer.nextToken());
+			}
+
+			String[] words = uniqueWords.toArray(new String[0]);
+			for (int i = 0; i < words.length; i++) {
+				for (int j = i + 1; j < words.length; j++) {
+					PairOfStrings pair = new PairOfStrings();
+					if (words[i].compareTo(words[j]) < 0) {
+						pair.set(words[i], words[j]);
+					} else {
+						pair.set(words[j], words[i]); 
+					}
+					context.write(pair, new IntWritable(1));
+				}
+			}
 		}
 	}
 
@@ -93,6 +121,12 @@ public class CORPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+
+			int sum = 0;
+			for (IntWritable val : values) {
+				sum += val.get();
+			}
+			context.write(key, new IntWritable(sum));
 		}
 	}
 
@@ -145,6 +179,21 @@ public class CORPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			int freqAB = 0;
+			for (IntWritable val : values) {
+				freqAB += val.get();
+			}
+
+			String wordA = key.getLeftElement();
+			String wordB = key.getRightElement();
+
+			Integer freqA = word_total_map.get(wordA);
+			Integer freqB = word_total_map.get(wordB);
+
+			if (freqA != null && freqB != null && freqA > 0 && freqB > 0) {
+				double cor = (double)freqAB / (freqA * freqB);
+				context.write(key, new DoubleWritable(cor));
+			}
 		}
 	}
 
